@@ -1,0 +1,175 @@
+import pandas as pd
+import numpy as np
+import re
+import nltk
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from collections import Counter
+
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+print("Program Started...\n")
+
+# ---------------- STEP 1: LOAD DATA ----------------
+data = pd.read_csv("c:/users/anush/OneDrive/Documents/fake_news_dataset.csv")
+
+print("Dataset Loaded Successfully!")
+print("\nFirst 5 rows:\n", data.head())
+
+# ---------------- STEP 2: TEXT CLEANING ----------------
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+
+stop_words = set(stopwords.words('english'))
+
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub('[^a-zA-Z]', ' ', text)
+    words = text.split()
+    words = [word for word in words if word not in stop_words]
+    return " ".join(words)
+
+data['clean_text'] = data['text'].apply(clean_text)
+
+print("\nText Cleaning Done!")
+
+# ---------------- STEP 3: EDA GRAPHS ----------------
+
+# 1. Fake vs Real Distribution
+plt.figure()
+sns.countplot(x=data['label'])
+plt.title("Fake vs Real News Distribution")
+plt.savefig("distribution.png")
+plt.show()
+plt.close()
+
+# 2. Text Length Distribution
+data['text_length'] = data['text'].apply(len)
+
+plt.figure()
+sns.histplot(data['text_length'], bins=50)
+plt.title("Text Length Distribution")
+plt.savefig("text_length.png")
+plt.show()
+plt.close()
+
+# 3. Length vs Label
+plt.figure()
+sns.boxplot(x='label', y='text_length', data=data)
+plt.title("Text Length vs Fake/Real")
+plt.savefig("length_vs_label.png")
+plt.show()
+plt.close()
+
+# 4. Most Common Words
+all_words = " ".join(data['clean_text']).split()
+common_words = Counter(all_words).most_common(10)
+
+words = [w[0] for w in common_words]
+counts = [w[1] for w in common_words]
+
+plt.figure()
+sns.barplot(x=counts, y=words)
+plt.title("Top 10 Most Common Words")
+plt.savefig("common_words.png")
+plt.show()
+plt.close()
+
+print("\nEDA Graphs Generated!")
+
+# ---------------- STEP 4: FEATURE EXTRACTION ----------------
+vectorizer = TfidfVectorizer(max_features=5000)
+
+X = vectorizer.fit_transform(data['clean_text'])
+y = data['label']
+
+print("\nTF-IDF Applied!")
+
+# ---------------- STEP 5: SPLIT ----------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+print("\nData Split Done!")
+
+# ---------------- STEP 6: MODEL ----------------
+model = LogisticRegression()
+model.fit(X_train, y_train)
+
+print("\nModel Training Done!")
+
+# ---------------- STEP 7: PREDICTION ----------------
+y_pred = model.predict(X_test)
+
+# ---------------- STEP 8: EVALUATION ----------------
+print("\nAccuracy:", accuracy_score(y_test, y_pred))
+
+print("\nClassification Report:\n",
+      classification_report(y_test, y_pred, zero_division=0))
+
+# ---------------- STEP 9: CONFUSION MATRIX ----------------
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure()
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+plt.title("Confusion Matrix")
+plt.savefig("confusion_matrix.png")
+plt.show()
+plt.close()
+
+# ---------------- STEP 10: COMPARISON GRAPHS ----------------
+
+# Actual vs Predicted
+pred_df = pd.DataFrame({
+    'Actual': y_test,
+    'Predicted': y_pred
+})
+
+plt.figure()
+sns.countplot(x='Actual', hue='Predicted', data=pred_df)
+plt.title("Actual vs Predicted Comparison")
+plt.savefig("actual_vs_predicted.png")
+plt.show()
+plt.close()
+
+# Correct vs Wrong
+correct = (y_test == y_pred).sum()
+wrong = (y_test != y_pred).sum()
+
+plt.figure()
+plt.bar(['Correct', 'Wrong'], [correct, wrong])
+plt.title("Model Accuracy Comparison")
+plt.savefig("accuracy_bar.png")
+plt.show()
+plt.close()
+
+# Prediction Probability
+probs = model.predict_proba(X_test)[:,1]
+
+plt.figure()
+sns.histplot(probs, bins=20)
+plt.title("Prediction Probability Distribution")
+plt.savefig("probability.png")
+plt.show()
+plt.close()
+
+print("\nComparison Graphs Generated!")
+
+# ---------------- STEP 11: TEST NEW NEWS ----------------
+sample_news = ["Government announces new policy for students"]
+
+sample_clean = [clean_text(sample_news[0])]
+sample_vector = vectorizer.transform(sample_clean)
+
+prediction = model.predict(sample_vector)
+
+if prediction[0] == 1:
+    print("\nPrediction: REAL NEWS")
+else:
+    print("\nPrediction: FAKE NEWS")
+
+print("\nProgram Finished Successfully!")
